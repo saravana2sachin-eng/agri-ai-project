@@ -15,7 +15,7 @@ def fetch_ndvi(lat, lon):
     return get_ndvi(lat, lon)
 
 # Load model
-model, scaler, encoder = joblib.load("crop_model.pkl")
+model = joblib.load("crop_model.pkl")
 
 st.title("🌱 Smart Crop Recommendation (Advanced AI)")
 
@@ -52,12 +52,10 @@ if st.button("Predict"):
         st.stop()
 
     # Prediction (8 FEATURES)
-    data = np.array([[N, P, K, temperature, humidity, ph, rainfall, ndvi]])
-    data = scaler.transform(data)
-
-    pred = model.predict(data)
+    data = np.array([[N, P, K, temperature, humidity, ph, rainfall]])
+    result = model.predict(data)
 
     # 🔥 Convert back to crop name
-    result = encoder.inverse_transform(pred)
+    result = encoder.inverse_transform(result)
 
     st.success(f"🌾 Recommended Crop: {result[0]}")
