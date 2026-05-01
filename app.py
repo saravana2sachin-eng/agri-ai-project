@@ -1,85 +1,57 @@
 import streamlit as st
+import torch
 import numpy as np
 import joblib
 
-# Page config
-st.set_page_config(page_title="Smart Crop AI", layout="wide")
+from model import CropModel
 
-# Load model
-model = joblib.load("crop_model.pkl")
+# ================= LOAD =================
+@st.cache_resource
+def load_model():
+    model = CropModel()
+    model.load_state_dict(torch.load("best_model.pth", map_location=torch.device("cpu")))
+    model.eval()
+    return model
 
-# Title
-st.title("🌱 Smart Crop Recommendation System")
-st.markdown("### AI-powered agriculture assistant 🌾")
+model = load_model()
 
-st.markdown("---")
+labels = joblib.load("labels.pkl")
 
-# Layout (2 columns)
-col1, col2 = st.columns([1, 1])
+# ================= UI =================
+st.set_page_config(page_title="Crop AI", layout="wide")
 
-# =========================
-# LEFT SIDE (INPUTS)
-# =========================
+st.title("🌱 AI Crop Recommendation System")
+
+col1, col2 = st.columns(2)
+
 with col1:
-    st.subheader("🧪 Soil Parameters")
+    st.subheader("Soil Data")
+    N = st.slider("Nitrogen", 0, 140, 50)
+    P = st.slider("Phosphorus", 0, 140, 40)
+    K = st.slider("Potassium", 0, 200, 40)
 
-    N = st.slider("Nitrogen (N)", 0, 140, 50)
-    P = st.slider("Phosphorus (P)", 0, 140, 40)
-    K = st.slider("Potassium (K)", 0, 200, 40)
-
-    st.subheader("🌦 Environmental Conditions")
-
-    temperature = st.slider("Temperature (°C)", 0, 50, 25)
-    humidity = st.slider("Humidity (%)", 0, 100, 60)
-    ph = st.slider("Soil pH", 0.0, 14.0, 6.5)
-    rainfall = st.slider("Rainfall (mm)", 0, 300, 100)
-
-    st.subheader("📍 Location")
+with col2:
+    st.subheader("Weather")
+    temp = st.slider("Temperature", 0, 50, 25)
+    hum = st.slider("Humidity", 0, 100, 60)
 
     lat = st.number_input("Latitude", value=23.5)
     lon = st.number_input("Longitude", value=77.5)
-
-# =========================
-# RIGHT SIDE (OUTPUT + MAP)
-# =========================
-with col2:
-    st.subheader("🗺 Farm Location")
-
     st.map({"lat": [lat], "lon": [lon]})
 
-    st.markdown("---")
+# ================= PREDICT =================
+if st.button("Predict Crop"):
 
-    st.subheader("📊 Prediction")
+    soil = torch.tensor([[N, P, K]], dtype=torch.float32) / 100.0
 
-    if st.button("🚀 Predict Crop", use_container_width=True):
+    weather = np.array([[temp, hum]] * 7, dtype=np.float32) / 100.0
+    ndvi = np.random.rand(7, 1).astype(np.float32)
 
-        data = np.array([[N, P, K, temperature, humidity, ph, rainfall]])
+    combined = np.concatenate((weather, ndvi), axis=1)
+    combined = torch.tensor([combined], dtype=torch.float32)
 
-        result = model.predict(data)
+    with torch.no_grad():
+        output = model(combined, soil)
+        pred = torch.argmax(output, dim=1).item()
 
-        st.success(f"🌾 Recommended Crop: **{result[0].upper()}**")
-
-        st.markdown("---")
-
-        st.subheader("📌 Input Summary")
-
-        st.write(f"""
-        **Soil:**
-        - Nitrogen: {N}
-        - Phosphorus: {P}
-        - Potassium: {K}
-
-        **Environment:**
-        - Temperature: {temperature} °C
-        - Humidity: {humidity} %
-        - pH: {ph}
-        - Rainfall: {rainfall} mm
-
-        **Location:**
-        - Latitude: {lat}
-        - Longitude: {lon}
-        """)
-
-# Footer
-st.markdown("---")
-st.caption("🚀 Built using Machine Learning + Streamlit | Smart Agriculture AI")
+    st.success(f"🌾 Recommended Crop: **{labels[pred].upper()}**")
